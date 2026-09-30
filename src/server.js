@@ -146,6 +146,19 @@ app.post("/pay", async (req, res) => {
         "Payments are made by a client, never by the server.",
     });
   }
+
+  // Guard against enabling /pay with a real Mainnet key. The payer signs
+  // transactions on behalf of whoever calls this route, so a funded mainnet key
+  // on a publicly reachable host is a standing loss risk. Testnet only.
+  const isTestnet = NETWORK.includes("SGO1GKSzyE7IEPItTxCByw9x8FmnrCDe");
+  if (!isTestnet) {
+    return res.status(503).json({
+      error:
+        "Demo payment is disabled on Mainnet: this route spends a key held by the " +
+        "server on behalf of any caller, which is unsafe for real funds.",
+    });
+  }
+
   try {
     res.json(await payAndFetch(`http://127.0.0.1:${PORT}`, text));
   } catch (err) {
