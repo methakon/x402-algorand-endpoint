@@ -97,6 +97,7 @@
         <div class="row">
           <button id="unpaid">1 · Send unpaid request (expect 402)</button>
           <button id="paid" disabled>2 · Pay and get the result</button>
+          <button id="sandbox" class="ghost">Try free sandbox</button>
           <button id="docs" class="ghost">API reference</button>
         </div>
       </div>
@@ -194,8 +195,43 @@
         }
       }
 
+      async function sandbox() {
+        $("sandbox").disabled = true;
+        set("wait", "Calling the free sandbox preview…");
+        try {
+          const res = await fetch("/api/sandbox", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-sandbox-key": "sandbox-demo-key",
+            },
+            body: JSON.stringify({ text: $("text").value }),
+          });
+          const d = await res.json();
+          if (res.status !== 200) {
+            set("err", d.error || `Sandbox returned ${res.status}`);
+            show(`<pre>${JSON.stringify(d, null, 2).replace(/</g, "&lt;")}</pre>`);
+            return;
+          }
+          const left = res.headers.get("x-ratelimit-remaining");
+          set("ok", `Free preview — no payment settled. Rate limit remaining: ${left}/10 per minute.`);
+          show(
+            `<div class="sentiment">${d.sentiment.toUpperCase()}</div>` +
+              `<p class="sub">Confidence ${d.confidence} · bullish ${d.signals.bullish} · bearish ${d.signals.bearish} · ${d.analysed.words} words</p>` +
+              `<p class="sub">${d.notice}</p>` +
+              `<pre>${JSON.stringify(d, null, 2).replace(/</g, "&lt;")}</pre>`
+          );
+        } catch (e) {
+          set("err", "Request failed.");
+          show(`<pre>${String(e)}</pre>`);
+        } finally {
+          $("sandbox").disabled = false;
+        }
+      }
+
       $("unpaid").onclick = unpaid;
       $("paid").onclick = paid;
+      $("sandbox").onclick = sandbox;
       $("docs").onclick = () => window.open("/docs", "_blank");
       loadConfig();
     </script>
