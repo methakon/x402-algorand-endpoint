@@ -5,3 +5,5 @@ node_modules/
 x402-TESTNET-ACCOUNT.json
 x402-CUSTOMER-ACCOUNT.json
 x402-MAINNET-ACCOUNT.json
+__pycache__/
+*.pyc
