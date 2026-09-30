@@ -26,6 +26,7 @@ export function buildOpenApi({ network, payTo, price, facilitator }) {
     servers: [{ url: "/", description: "This deployment" }],
     tags: [
       { name: "Paid", description: "Endpoints that require an x402 payment" },
+      { name: "Sandbox", description: "Free, rate-limited preview. No payment, no settlement." },
       { name: "Free", description: "Discovery and health, no payment required" },
     ],
     paths: {
@@ -92,6 +93,116 @@ export function buildOpenApi({ network, payTo, price, facilitator }) {
           },
         },
       },
+      "/api/sandbox": {
+        post: {
+          tags: ["Sandbox"],
+          summary: "Free, rate-limited preview of the analysis",
+          description: [
+            "Returns the same analysis as `POST /api/analyze` without requiring a",
+            "payment. Use this to see the shape of the resource before deciding to",
+            "pay for it.",
+            "",
+            "Requires the demo key in the `x-sandbox-key` header. Click **Authorize**",
+            "above to enter it. The key is a published demo value, not a secret:",
+            "`sandbox-demo-key`.",
+            "",
+            "Rate limited to **10 requests per 60 seconds**. Responses carry",
+            "`X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`;",
+            "exceeding the limit returns `429` with `Retry-After`.",
+            "",
+            "This route is deliberately separate from the paid route. Nothing here is",
+            "billed and no settlement occurs.",
+          ].join("\n"),
+          security: [{ sandboxKey: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["text"],
+                  properties: {
+                    text: {
+                      type: "string",
+                      example: "algorand adoption growth and strong buy signal",
+                    },
+                  },
+                },
+                example: { text: "algorand adoption growth and strong buy signal" },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "Free preview returned.",
+              headers: {
+                "X-RateLimit-Limit": {
+                  description: "Requests allowed per window.",
+                  schema: { type: "integer", example: 10 },
+                },
+                "X-RateLimit-Remaining": {
+                  description: "Requests left in the current window.",
+                  schema: { type: "integer", example: 7 },
+                },
+                "X-RateLimit-Reset": {
+                  description: "Unix time the window resets.",
+                  schema: { type: "integer", example: 1790778000 },
+                },
+              },
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/SandboxAnalysis" },
+                },
+              },
+            },
+            400: {
+              description: "Malformed request.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { error: { type: "string", example: "text is required" } },
+                  },
+                },
+              },
+            },
+            401: {
+              description: "Missing or invalid sandbox key.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      error: { type: "string", example: "Invalid or missing sandbox key." },
+                      hint: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+            429: {
+              description: "Rate limit exceeded. Retry after `Retry-After` seconds.",
+              headers: {
+                "Retry-After": {
+                  description: "Seconds until the window resets.",
+                  schema: { type: "integer", example: 42 },
+                },
+              },
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      error: { type: "string" },
+                      retryAfterSeconds: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       "/discovery/resources": {
         get: {
           tags: ["Free"],
@@ -138,6 +249,16 @@ export function buildOpenApi({ network, payTo, price, facilitator }) {
     },
     components: {
       securitySchemes: {
+        sandboxKey: {
+          type: "apiKey",
+          in: "header",
+          name: "x-sandbox-key",
+          description:
+            "Published demo key for the sandbox preview: `sandbox-demo-key`. " +
+            "It is not a secret and grants no access to the paid route. " +
+            "Rate limited to 10 requests per 60 seconds.",
+          example: "sandbox-demo-key",
+        },
         x402Payment: {
           type: "apiKey",
           in: "header",
@@ -149,6 +270,34 @@ export function buildOpenApi({ network, payTo, price, facilitator }) {
         },
       },
       schemas: {
+        SandboxAnalysis: {
+          type: "object",
+          properties: {
+            sentiment: {
+              type: "string",
+              enum: ["bullish", "bearish", "mixed", "neutral"],
+              example: "bullish",
+            },
+            confidence: { type: "number", example: 1 },
+            signals: {
+              type: "object",
+              properties: {
+                bullish: { type: "integer", example: 3 },
+                bearish: { type: "integer", example: 0 },
+              },
+            },
+            analysed: {
+              type: "object",
+              properties: {
+                words: { type: "integer", example: 7 },
+                characters: { type: "integer", example: 46 },
+              },
+            },
+            network: { type: "string", example: network },
+            sandbox: { type: "boolean", example: true },
+            notice: { type: "string" },
+          },
+        },
         Analysis: {
           type: "object",
           properties: {
