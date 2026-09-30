@@ -54,6 +54,52 @@ Two properties follow from that design:
   response delivery are distinct steps, and the facilitator is the party that
   attests the payment landed.
 
+## Endpoints
+
+Live at **https://x402.berhampore.in** (Algorand Testnet).
+
+| Path | Method | Payment | Purpose |
+|---|---|---|---|
+| `/` | GET | free | Demo page: shows the 402 requirement, then a settled payment |
+| `/docs` | GET | free | **Swagger UI** interactive API reference |
+| `/openapi.json` | GET | free | The OpenAPI 3.0.3 document Swagger UI renders |
+| `/healthz` | GET | free | Health, active network, payTo, price |
+| `/discovery/resources` | GET | free | Bazaar discovery document |
+| `/api/analyze` | POST | **0.02 USDC** | Sentiment analysis |
+| `/pay` | POST | — | Demo helper; disabled unless `X402_PAYER_KEY64` is set |
+
+### API reference (Swagger UI)
+
+The interactive reference is rendered by
+[`swagger-ui-express`](https://www.npmjs.com/package/swagger-ui-express) from a
+generated OpenAPI 3.0.3 document.
+
+- Swagger UI: **https://x402.berhampore.in/docs**
+- Spec JSON: **https://x402.berhampore.in/openapi.json**
+
+The document is built by `src/openapi.js` rather than hand-written into the
+server, so the rendered reference and the running routes cannot drift apart. It
+documents the paid route's `402` response with the full x402 payment requirement
+shape, and declares `PAYMENT-SIGNATURE` as the security scheme.
+
+```bash
+curl https://x402.berhampore.in/openapi.json | jq '.paths | keys'
+```
+
+### Why `/pay` is disabled in the public deployment
+
+`/pay` settles a real payment so the demo page can show the full flow in one
+click. It requires a funded signing key, and the public host deliberately does
+not have one — a visitor must not be able to spend from an operator's wallet,
+and the endpoint itself never holds customer funds. It returns `503` there by
+design.
+
+To record a payment against the live endpoint, run the client instead:
+
+```bash
+X402_BASE_URL=https://x402.berhampore.in node scripts/pay-endpoint.mjs
+```
+
 ## Usage
 
 An unpaid request:
@@ -94,6 +140,7 @@ is listed in the x402 catalogue, tagged for the challenge.
 | `X402_NETWORK` | CAIP-2 network id. Defaults to Testnet. |
 | `X402_PRICE_USDC` | Price per request in USDC. Default `0.02`. |
 | `X402_FACILITATOR_URL` | Facilitator base URL. |
+| `X402_PAYER_KEY64` | Base64 64-byte Algorand secret key for the `/pay` demo helper. Unset in the public deployment. |
 | `PORT` | Listen port. Default `8402`. |
 
 The network identifiers used here are the reference-suffixed CAIP-2 ids the
