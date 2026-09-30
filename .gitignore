@@ -3,3 +3,4 @@ node_modules/
 *.log
 .DS_Store
 x402-TESTNET-ACCOUNT.json
+x402-CUSTOMER-ACCOUNT.json
