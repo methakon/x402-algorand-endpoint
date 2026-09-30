@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sentiment402 · x402 on Algorand</title>
+    <style>
+      :root {
+        --bg: #0b0e14;
+        --panel: #141926;
+        --line: #232a3b;
+        --ink: #e6e9f0;
+        --muted: #8b95ab;
+        --accent: #7c5cff;
+        --ok: #2fbf71;
+        --warn: #e8a33d;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; }
+      header { border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 28px; }
+      h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.2px; }
+      .sub { color: var(--muted); font-size: 14px; }
+      .tag {
+        display: inline-block; padding: 2px 9px; border-radius: 999px;
+        background: rgba(124,92,255,.15); color: #b9a8ff;
+        font: 600 11px/1.7 var(--mono); letter-spacing: .3px;
+      }
+      .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+      h2 { margin: 0 0 14px; font-size: 15px; letter-spacing: .3px; text-transform: uppercase; color: var(--muted); }
+      label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+      textarea, input {
+        width: 100%; background: #0d111b; color: var(--ink);
+        border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+        font: 14px/1.5 var(--mono); resize: vertical;
+      }
+      textarea:focus, input:focus { outline: none; border-color: var(--accent); }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+      button {
+        background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+        padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+      }
+      button:hover { filter: brightness(1.1); }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      button.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+      pre {
+        background: #0d111b; border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px; overflow-x: auto; font: 13px/1.6 var(--mono);
+        margin: 0; white-space: pre-wrap; word-break: break-word;
+      }
+      .status { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 12px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+      .dot.wait { background: var(--warn); animation: pulse 1.1s infinite; }
+      .dot.ok { background: var(--ok); }
+      .dot.err { background: #e5484d; }
+      @keyframes pulse { 50% { opacity: .3; } }
+      .kv { display: grid; grid-template-columns: 150px 1fr; gap: 7px 14px; font-size: 13.5px; }
+      .kv dt { color: var(--muted); }
+      .kv dd { margin: 0; font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+      .sentiment { font-size: 30px; font-weight: 700; letter-spacing: -.5px; }
+      .steps { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13.5px; }
+      .steps li { margin-bottom: 5px; }
+      a { color: #b9a8ff; }
+      code { font-family: var(--mono); font-size: 12.5px; background: #0d111b; padding: 1px 5px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <span class="tag">x402-global-challenge</span>
+        <h1>Sentiment402</h1>
+        <div class="sub">
+          Pay-per-request market sentiment analysis, settled in USDC on Algorand.
+        </div>
+      </header>
+
+      <div class="panel">
+        <h2>How the payment flow works</h2>
+        <ol class="steps">
+          <li>An unpaid request gets <code>402 Payment Required</code> with an x402 requirement.</li>
+          <li>A client builds and signs an Algorand USDC transfer for that requirement.</li>
+          <li>The facilitator verifies and settles it on chain.</li>
+          <li>Only then is the analysis served — never before payment lands.</li>
+        </ol>
+      </div>
+
+      <div class="panel">
+        <h2>Try the endpoint</h2>
+        <label for="text">Text sample</label>
+        <textarea id="text" rows="4">algorand adoption growth and strong buy signal</textarea>
+        <div class="row">
+          <button id="unpaid">1 · Send unpaid request (expect 402)</button>
+          <button id="paid" disabled>2 · Pay and get the result</button>
+          <button id="docs" class="ghost">API reference</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Result</h2>
+        <div class="status"><span class="dot" id="dot"></span><span id="status">Ready.</span></div>
+        <div id="result"><pre>Nothing yet — run step 1 above.</pre></div>
+      </div>
+
+      <div class="panel">
+        <h2>Active configuration</h2>
+        <dl class="kv" id="cfg"><dd>Loading…</dd></dl>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const set = (state, msg) => {
+        $("dot").className = "dot " + state;
+        $("status").textContent = msg;
+      };
+      const show = (html) => { $("result").innerHTML = html; };
+
+      async function loadConfig() {
+        try {
+          const r = await fetch("/healthz");
+          const c = await r.json();
+          $("cfg").innerHTML = `
+            <dt>Network</dt><dd>${c.network}</dd>
+            <dt>payTo</dt><dd>${c.payTo}</dd>
+            <dt>Price per call</dt><dd>${c.price} USDC</dd>`;
+        } catch (e) {
+          $("cfg").innerHTML = "<dd>Could not load /healthz</dd>";
+        }
+      }
+
+      async function unpaid() {
+        $("unpaid").disabled = true;
+        set("wait", "Requesting without payment…");
+        const r = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: $("text").value }),
+        });
+        const req = r.headers.get("payment-required");
+        let decoded = "(no PAYMENT-REQUIRED header)";
+        if (req) {
+          try {
+            decoded = JSON.stringify(JSON.parse(atob(req)), null, 2);
+          } catch { decoded = req; }
+        }
+        show(
+          `<div class="sentiment">HTTP ${r.status} ${r.statusText}</div>` +
+            `<p class="sub">The server refused to serve the resource without payment, and published what it requires:</p>` +
+            `<pre>${decoded.replace(/</g, "&lt;")}</pre>`
+        );
+        set("warn", "Got 402. Now pay to unlock the response.");
+        $("unpaid").disabled = false;
+        $("paid").disabled = false;
+      }
+
+      async function paid() {
+        $("paid").disabled = true;
+        $("unpaid").disabled = true;
+        set("wait", "Running the paying client against this endpoint…");
+        try {
+          // Payment is made by the client, never by the server. This host holds
+          // no signing key, so a visitor's browser cannot settle on its behalf.
+          const res = await fetch("/pay", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: $("text").value }),
+          });
+          const out = await res.json();
+          if (out.error) {
+            set("err", "Payment failed.");
+            show(`<pre>${out.error}</pre>`);
+          } else {
+            const a = out.analysis;
+            set("ok", "Payment settled on chain. Response served.");
+            show(
+              `<div class="sentiment">${a.sentiment.toUpperCase()}</div>` +
+                `<p class="sub">Confidence ${a.confidence} · bullish ${a.signals.bullish} · bearish ${a.signals.bearish} · ${a.analysed.words} words</p>` +
+                `<h2>Settlement</h2><pre>${JSON.stringify(out.settlement, null, 2).replace(/</g, "&lt;")}</pre>` +
+                `<h2>Analysis</h2><pre>${JSON.stringify(a, null, 2).replace(/</g, "&lt;")}</pre>`
+            );
+          }
+        } catch (e) {
+          set("err", "Request failed.");
+          show(`<pre>${String(e)}</pre>`);
+        } finally {
+          $("paid").disabled = false;
+          $("unpaid").disabled = false;
+        }
+      }
+
+      $("unpaid").onclick = unpaid;
+      $("paid").onclick = paid;
+      $("docs").onclick = () => window.open("/docs", "_blank");
+      loadConfig();
+    </script>
+  </body>
+</html>

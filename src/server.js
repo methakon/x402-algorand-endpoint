@@ -6,9 +6,14 @@
  * the response served.
  */
 import express from "express";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactAvmScheme } from "@x402/avm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
+import swaggerUi from "swagger-ui-express";
+import { buildOpenApi } from "./openapi.js";
+import { hasPayerKey, payAndFetch } from "./payer.js";
 
 const PORT = Number(process.env.PORT || 8402);
 
@@ -29,6 +34,21 @@ if (!PAY_TO) {
 
 const app = express();
 app.use(express.json());
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+const openapi = buildOpenApi({
+  network: NETWORK,
+  payTo: PAY_TO,
+  price: PRICE_USDC,
+  facilitator: FACILITATOR,
+});
+
+// Swagger UI renders the spec above; the spec itself is served as JSON.
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi, { customSiteTitle: "Sentiment402 API" }));
+app.get("/openapi.json", (_req, res) => res.json(openapi));
+
+app.use(express.static(join(here, "public")));
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, network: NETWORK, payTo: PAY_TO, price: PRICE_USDC });
@@ -110,10 +130,35 @@ app.post("/api/analyze", (req, res) => {
   });
 });
 
+// Demo helper for the UI's "pay" button. It settles a real payment using a key
+// held on this host, so it must stay disabled unless X402_PAYER_KEY64 is set.
+// The public deployment deliberately leaves it unset: the endpoint host should
+// never hold a funded signing key.
+app.post("/pay", async (req, res) => {
+  const text = String(req.body?.text || "").trim();
+  if (!text) {
+    return res.status(400).json({ error: "text is required" });
+  }
+  if (!hasPayerKey()) {
+    return res.status(503).json({
+      error:
+        "Demo payment is disabled: no payer key is configured on this host. " +
+        "Payments are made by a client, never by the server.",
+    });
+  }
+  try {
+    res.json(await payAndFetch(`http://127.0.0.1:${PORT}`, text));
+  } catch (err) {
+    res.status(502).json({ error: String(err.message || err).slice(0, 300) });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`x402 endpoint listening on http://127.0.0.1:${PORT}`);
   console.log(`  network     : ${NETWORK}`);
   console.log(`  payTo       : ${PAY_TO}`);
   console.log(`  price       : ${PRICE_USDC} USDC per POST /api/analyze`);
   console.log(`  facilitator : ${FACILITATOR}`);
+  console.log(`  ui          : /          api reference: /docs`);
+  console.log(`  demo /pay   : ${hasPayerKey() ? "enabled" : "disabled (no X402_PAYER_KEY64 set)"}`);
 });
